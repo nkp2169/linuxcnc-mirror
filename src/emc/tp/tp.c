@@ -3274,8 +3274,6 @@ int tpResume(TP_STRUCT * const tp)
         return TP_ERR_FAIL;
     }
     tp->pausing = 0;
-    //FIXME Is this call ignored with non-zero velocity? If so, it will cause a crash
-    tpSetRunDir(&emcmotDebug->coord_tp, TC_DIR_FORWARD);
     return TP_ERR_OK;
 }
 
