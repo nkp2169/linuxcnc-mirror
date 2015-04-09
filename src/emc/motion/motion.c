@@ -341,6 +341,7 @@ static int init_hal_io(void)
     if ((retval = hal_pin_bit_newf(HAL_IN, &(emcmot_hal_data->feed_hold), mot_comp_id, "motion.feed-hold")) != 0) goto error;
     if ((retval = hal_pin_bit_newf(HAL_IN, &(emcmot_hal_data->feed_inhibit), mot_comp_id, "motion.feed-inhibit")) != 0) goto error;
     if ((retval = hal_pin_bit_newf(HAL_IN, &(emcmot_hal_data->enable), mot_comp_id, "motion.enable")) != 0) goto error;
+    if ((retval = hal_pin_bit_newf(HAL_IN, &(emcmot_hal_data->tp_reverse), mot_comp_id, "motion.tp-reverse")) != 0) goto error;
 
     /* export motion-synched digital output pins */
     /* export motion digital input pins */
@@ -392,7 +393,7 @@ static int init_hal_io(void)
         if ((retval = hal_param_float_newf(HAL_RO, &(emcmot_hal_data->tc_pos[n]), mot_comp_id, "tc.%d.pos", n)) != 0) goto error;
         if ((retval = hal_param_float_newf(HAL_RO, &(emcmot_hal_data->tc_vel[n]), mot_comp_id, "tc.%d.vel", n)) != 0) goto error;
         if ((retval = hal_param_float_newf(HAL_RO, &(emcmot_hal_data->tc_acc[n]), mot_comp_id, "tc.%d.acc", n)) != 0) goto error;
-    }
+	}
     // end of exporting trajectory planner internals
 
     // export timing related HAL parameters so they can be scoped
@@ -415,6 +416,8 @@ static int init_hal_io(void)
     *(emcmot_hal_data->adaptive_feed) = 1.0;
     *(emcmot_hal_data->feed_hold) = 0;
     *(emcmot_hal_data->feed_inhibit) = 0;
+    *(emcmot_hal_data->feed_inhibit) = 0;
+    *(emcmot_hal_data->tp_reverse) = 0;
 
     *(emcmot_hal_data->probe_input) = 0;
     /* default value of enable is TRUE, so simple machines
@@ -561,7 +564,7 @@ static int export_joint(int num, joint_hal_t * addr)
     /* restore saved message level */
     rtapi_set_msg_level(msg);
     return 0;
-}
+    }
 
 static int export_axis(char c, axis_hal_t * addr)
 {

@@ -459,7 +459,7 @@ static void do_forward_kins(void)
 	joint = &joints[joint_num];
 	/* copy feedback */
 	joint_pos[joint_num] = joint->pos_fb;
-    }
+	}
     switch (emcmotConfig->kinType) {
 
     case KINEMATICS_IDENTITY:
@@ -1074,20 +1074,20 @@ static void get_pos_cmds(long period)
 	    if(joint->acc_limit > emcmotStatus->acc)
 		joint->acc_limit = emcmotStatus->acc;
 	    /* compute joint velocity limit */
-            if ( joint->home_state == HOME_IDLE ) {
+                if ( joint->home_state == HOME_IDLE ) {
                 /* velocity limit = joint limit * global scale factor */
-                /* the global factor is used for feedrate override */
+                    /* the global factor is used for feedrate override */
                 vel_lim = joint->vel_limit * emcmotStatus->net_feed_scale;
-                /* must not be greater than the joint physical limit */
-                if (vel_lim > joint->vel_limit) {
-                    vel_lim = joint->vel_limit;
-                }
+		/* must not be greater than the joint physical limit */
+		if (vel_lim > joint->vel_limit) {
+		    vel_lim = joint->vel_limit;
+		}
                 /* set vel limit in free TP */
                if (vel_lim < joint->free_tp.max_vel)
                    joint->free_tp.max_vel = vel_lim;
-            } else {
+		} else {
                 /* except if homing, when we set free_tp max vel in do_homing */
-            }
+		}
             /* set acc limit in free TP */
             joint->free_tp.max_acc = joint->acc_limit;
             /* execute free TP */
@@ -1096,23 +1096,23 @@ static void get_pos_cmds(long period)
             joint->pos_cmd = joint->free_tp.curr_pos;
             joint->vel_cmd = joint->free_tp.curr_vel;
             joint->coarse_pos = joint->free_tp.curr_pos;
-            /* update joint status flag and overall status flag */
+		/* update joint status flag and overall status flag */
             if ( joint->free_tp.active ) {
-		/* active TP means we're moving, so not in position */
-		SET_JOINT_INPOS_FLAG(joint, 0);
-		SET_MOTION_INPOS_FLAG(0);
+		    /* active TP means we're moving, so not in position */
+		    SET_JOINT_INPOS_FLAG(joint, 0);
+		    SET_MOTION_INPOS_FLAG(0);
                 /* if we move at all, clear AT_HOME flag */
 		SET_JOINT_AT_HOME_FLAG(joint, 0);
-		/* is any limit disabled for this move? */
-		if ( emcmotStatus->overrideLimitMask ) {
-                    emcmotDebug->overriding = 1;
-		}
-            } else {
-		SET_JOINT_INPOS_FLAG(joint, 1);
-		/* joint has stopped, so any outstanding jogs are done */
+		    /* is any limit disabled for this move? */
+		    if ( emcmotStatus->overrideLimitMask ) {
+			emcmotDebug->overriding = 1;
+		    }
+		} else {
+		    SET_JOINT_INPOS_FLAG(joint, 1);
+		    /* joint has stopped, so any outstanding jogs are done */
 		joint->kb_jjog_active = 0;
 		joint->wheel_jjog_active = 0;
-            }
+		}
 	}//for loop for joints
 	/* if overriding is true and we're in position, the jog
 	   is complete, and the limits should be re-enabled */
@@ -1185,7 +1185,7 @@ static void get_pos_cmds(long period)
 		&iflags, &fflags);
 	    if(result == 0)
 	    {
-		/* copy to joint structures and spline them up */
+	    /* copy to joint structures and spline them up */
 		for (joint_num = 0; joint_num < emcmotConfig->numJoints; joint_num++) {
 		    if(!isfinite(positions[joint_num]))
 		    {
@@ -1195,14 +1195,14 @@ static void get_pos_cmds(long period)
                        emcmotDebug->enabling = 0;
                        break;
 		    }
-		    /* point to joint struct */
-		    joint = &joints[joint_num];
-		    joint->coarse_pos = positions[joint_num];
-		    /* spline joints up-- note that we may be adding points
-		       that fail soft limits, but we'll abort at the end of
-		       this cycle so it doesn't really matter */
-		    cubicAddPoint(&(joint->cubic), joint->coarse_pos);
-		}
+		/* point to joint struct */
+		joint = &joints[joint_num];
+		joint->coarse_pos = positions[joint_num];
+		/* spline joints up-- note that we may be adding points
+		   that fail soft limits, but we'll abort at the end of
+		   this cycle so it doesn't really matter */
+		cubicAddPoint(&(joint->cubic), joint->coarse_pos);
+	    }
 	    }
 	    else
 	    {
@@ -1246,9 +1246,9 @@ static void get_pos_cmds(long period)
             if(!axis->teleop_tp.active) {
                 axis->kb_ajog_active = 0;
                 axis->wheel_ajog_active = 0;
-            }
-        }
-
+	}
+	}
+	
         emcmotStatus->carte_pos_cmd.tran.x = (&axes[0])->teleop_tp.curr_pos;
         emcmotStatus->carte_pos_cmd.tran.y = (&axes[1])->teleop_tp.curr_pos;
         emcmotStatus->carte_pos_cmd.tran.z = (&axes[2])->teleop_tp.curr_pos;
@@ -1258,7 +1258,7 @@ static void get_pos_cmds(long period)
         emcmotStatus->carte_pos_cmd.u = (&axes[6])->teleop_tp.curr_pos;
         emcmotStatus->carte_pos_cmd.v = (&axes[7])->teleop_tp.curr_pos;
         emcmotStatus->carte_pos_cmd.w = (&axes[8])->teleop_tp.curr_pos;
-
+	
 	/* the next position then gets run through the inverse kins,
 	    to compute the next positions of the joints */
 
@@ -1276,18 +1276,18 @@ static void get_pos_cmds(long period)
 		   emcmotDebug->enabling = 0;
 		   break;
 		}
-		/* point to joint struct */
-		joint = &joints[joint_num];
-		joint->coarse_pos = positions[joint_num];
-		/* spline joints up-- note that we may be adding points
-		       that fail soft limits, but we'll abort at the end of
-		       this cycle so it doesn't really matter */
-		cubicAddPoint(&(joint->cubic), joint->coarse_pos);
-		old_pos_cmd = joint->pos_cmd;
-		/* interpolate to get new one */
-		joint->pos_cmd = cubicInterpolate(&(joint->cubic), 0, 0, 0, 0);
-		joint->vel_cmd = (joint->pos_cmd - old_pos_cmd) * servo_freq;
-	    }
+	    /* point to joint struct */
+	    joint = &joints[joint_num];
+	    joint->coarse_pos = positions[joint_num];
+	    /* spline joints up-- note that we may be adding points
+		   that fail soft limits, but we'll abort at the end of
+		   this cycle so it doesn't really matter */
+	    cubicAddPoint(&(joint->cubic), joint->coarse_pos);
+	    old_pos_cmd = joint->pos_cmd;
+	    /* interpolate to get new one */
+	    joint->pos_cmd = cubicInterpolate(&(joint->cubic), 0, 0, 0, 0);
+	    joint->vel_cmd = (joint->pos_cmd - old_pos_cmd) * servo_freq;
+	}
 	}
 	else
 	{
@@ -1337,15 +1337,15 @@ static void get_pos_cmds(long period)
 	    continue;
         }
 
-	/* check for soft limits */
-	if (joint->pos_cmd > joint->max_pos_limit) {
+	    /* check for soft limits */
+	    if (joint->pos_cmd > joint->max_pos_limit) {
 	    joint_limit[joint_num][1] = 1;
-            onlimit = 1;
-        }
+		onlimit = 1;
+	    }
         else if (joint->pos_cmd < joint->min_pos_limit) {
 	    joint_limit[joint_num][0] = 1;
-            onlimit = 1;
-        }
+		onlimit = 1;
+	}
     }
     if ( onlimit ) {
 	if ( ! emcmotStatus->on_soft_limit ) {
@@ -1386,7 +1386,7 @@ static void get_pos_cmds(long period)
             axis->teleop_tp.enable = 0;
             axis->teleop_tp.curr_vel = 0.0;
         }
-    }
+}
 }
 
 /* NOTES:  These notes are just my understanding of how things work.
@@ -1708,8 +1708,8 @@ static void output_to_hal(void)
 	*(emcmot_hal_data->spindle_speed_out) = emcmotStatus->spindle.speed * emcmotStatus->net_spindle_scale;
 	*(emcmot_hal_data->spindle_speed_out_rps) = emcmotStatus->spindle.speed * emcmotStatus->net_spindle_scale / 60.;
     }
-    *(emcmot_hal_data->spindle_speed_out_abs) = fabs(*(emcmot_hal_data->spindle_speed_out));
-    *(emcmot_hal_data->spindle_speed_out_rps_abs) = fabs(*(emcmot_hal_data->spindle_speed_out_rps));
+	*(emcmot_hal_data->spindle_speed_out_abs) = fabs(*(emcmot_hal_data->spindle_speed_out));
+	*(emcmot_hal_data->spindle_speed_out_rps_abs) = fabs(*(emcmot_hal_data->spindle_speed_out_rps));
     *(emcmot_hal_data->spindle_speed_cmd_rps) = emcmotStatus->spindle.speed / 60.;
     *(emcmot_hal_data->spindle_on) = ((emcmotStatus->spindle.speed * emcmotStatus->net_spindle_scale) != 0) ? 1 : 0;
     *(emcmot_hal_data->spindle_forward) = (*emcmot_hal_data->spindle_speed_out > 0) ? 1 : 0;
@@ -1717,12 +1717,13 @@ static void output_to_hal(void)
     *(emcmot_hal_data->spindle_brake) = (emcmotStatus->spindle.brake != 0) ? 1 : 0;
     
     *(emcmot_hal_data->program_line) = emcmotStatus->id;
+    *(emcmot_hal_data->tp_reverse) = emcmotStatus->reverse_run;
     *(emcmot_hal_data->motion_type) = emcmotStatus->motionType;
     *(emcmot_hal_data->distance_to_go) = emcmotStatus->distance_to_go;
     if(GET_MOTION_COORD_FLAG()) {
         *(emcmot_hal_data->current_vel) = emcmotStatus->current_vel;
         *(emcmot_hal_data->requested_vel) = emcmotStatus->requested_vel;
-    } else if (GET_MOTION_TELEOP_FLAG()) {
+    } else if(GET_MOTION_TELEOP_FLAG()) {
         int i;
         double v2 = 0.0;
         for(i=0; i < EMCMOT_MAX_AXIS; i++)
@@ -1838,7 +1839,7 @@ static void output_to_hal(void)
 	*(axis_data->teleop_tp_enable) = axis->teleop_tp.enable;
 	*(axis_data->kb_ajog_active) = axis->kb_ajog_active;
 	*(axis_data->wheel_ajog_active) = axis->wheel_ajog_active;
-     }
+}
 
 }
 
@@ -1916,6 +1917,7 @@ static void update_status(void)
     emcmotStatus->id = tpGetExecId(&emcmotDebug->coord_tp);
     emcmotStatus->motionType = tpGetMotionType(&emcmotDebug->coord_tp);
     emcmotStatus->queueFull = tcqFull(&emcmotDebug->coord_tp.queue);
+    emcmotStatus->reverse_run = emcmotDebug->coord_tp.reverse_run;
 
     /* check to see if we should pause in order to implement
        single emcmotDebug->stepping */
