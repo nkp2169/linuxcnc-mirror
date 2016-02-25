@@ -217,7 +217,6 @@ STATIC inline double tpGetRealTargetVel(TP_STRUCT const * const tp,
 
     // Start with the scaled target velocity based on the current feed scale
     double v_target = tc->synchronized ? tc->target_vel : tc->reqvel;
-    /*tc_debug_print("Initial v_target = %f\n",v_target);*/
 
     // Get the maximum allowed target velocity, and make sure we're below it
     return fmin(v_target * tpGetFeedScale(tp,tc), tpGetMaxTargetVel(tp, tc));
@@ -226,6 +225,7 @@ STATIC inline double tpGetRealTargetVel(TP_STRUCT const * const tp,
 
 /**
  * Get the worst-case target velocity for a segment based on the trajectory planner state.
+ * Note that this factors in the user-specified velocity limit.
  */
 STATIC inline double tpGetMaxTargetVel(TP_STRUCT const * const tp, TC_STRUCT const * const tc)
 {
@@ -234,8 +234,7 @@ STATIC inline double tpGetMaxTargetVel(TP_STRUCT const * const tp, TC_STRUCT con
         //KLUDGE: Don't allow feed override to keep blending from overruning max velocity
         max_scale = fmin(max_scale, 1.0);
     }
-    // Get maximum reachable velocity from max feed override
-    double v_max_target = tc->target_vel * max_scale;
+    double v_max_target = tcGetMaxTargetVel(tc, max_scale);
 
     /* Check if the cartesian velocity limit applies and clip the maximum
      * velocity. The vLimit is from the max velocity slider, and should
@@ -246,11 +245,10 @@ STATIC inline double tpGetMaxTargetVel(TP_STRUCT const * const tp, TC_STRUCT con
      */
     if (!tcPureRotaryCheck(tc) && (tc->synchronized != TC_SYNC_POSITION)){
         /*tc_debug_print("Cartesian velocity limit active\n");*/
-        v_max_target = fmin(v_max_target,tp->vLimit);
+        v_max_target = fmin(v_max_target, tp->vLimit);
     }
 
-    // Clip maximum velocity by the segment's own maximum velocity
-    return fmin(v_max_target, tc->maxvel);
+    return v_max_target;
 }
 
 
@@ -910,7 +908,6 @@ STATIC int tpCreateLineArcBlend(TP_STRUCT * const tp, TC_STRUCT * const prev_tc,
     //set the max velocity to v_plan, since we'll violate constraints otherwise.
     tpInitBlendArcFromPrev(tp, prev_tc, blend_tc, param.v_req,
             param.v_plan, param.a_max);
-    blend_tc->target_vel = param.v_actual;
 
     int res_tangent = checkTangentAngle(&circ2_temp,
             &blend_tc->coords.arc.xyz,
@@ -1071,7 +1068,6 @@ STATIC int tpCreateArcLineBlend(TP_STRUCT * const tp, TC_STRUCT * const prev_tc,
     //set the max velocity to v_plan, since we'll violate constraints otherwise.
     tpInitBlendArcFromPrev(tp, prev_tc, blend_tc, param.v_req,
             param.v_plan, param.a_max);
-    blend_tc->target_vel = param.v_actual;
 
     int res_tangent = checkTangentAngle(&circ1_temp, &blend_tc->coords.arc.xyz, &geom, &param, tp->cycleTime, false);
     if (res_tangent) {
@@ -1240,7 +1236,6 @@ STATIC int tpCreateArcArcBlend(TP_STRUCT * const tp, TC_STRUCT * const prev_tc, 
     //set the max velocity to v_plan, since we'll violate constraints otherwise.
     tpInitBlendArcFromPrev(tp, prev_tc, blend_tc, param.v_req,
             param.v_plan, param.a_max);
-    blend_tc->target_vel = param.v_actual;
 
     int res_tangent1 = checkTangentAngle(&circ1_temp, &blend_tc->coords.arc.xyz, &geom, &param, tp->cycleTime, false);
     int res_tangent2 = checkTangentAngle(&circ2_temp, &blend_tc->coords.arc.xyz, &geom, &param, tp->cycleTime, true);
@@ -1318,11 +1313,11 @@ STATIC int tpCreateLineLineBlend(TP_STRUCT * const tp, TC_STRUCT * const prev_tc
     //set the max velocity to v_plan, since we'll violate constraints otherwise.
     tpInitBlendArcFromPrev(tp, prev_tc, blend_tc, param.v_req,
             param.v_plan, param.a_max);
-    blend_tc->target_vel = param.v_actual;
 
     if (tpCheckTangentPerformance(tp, prev_tc, tc, blend_tc) == TP_ERR_NO_ACTION) {
         return TP_ERR_NO_ACTION;
     }
+    tp_debug_print("blend_tc target_vel = %g\n", blend_tc->target_vel);
 
     int retval = TP_ERR_FAIL;
 
@@ -1538,8 +1533,8 @@ STATIC int tpComputeOptimalVelocity(TP_STRUCT const * const tp, TC_STRUCT * cons
     //Limit tc's target velocity to avoid creating "humps" in the velocity profile
     prev1_tc->finalvel = vs_back;
 
-    tp_info_print(" prev1_tc-> fv = %f, tc->fv = %f, capped target = %f\n",
-            prev1_tc->finalvel, tc->finalvel, tc->target_vel);
+    tp_info_print(" prev1_tc-> fv = %f, tc->fv = %f\n",
+            prev1_tc->finalvel, tc->finalvel);
 
     return TP_ERR_OK;
 }
@@ -1725,8 +1720,10 @@ STATIC int tpSetupTangent(TP_STRUCT const * const tp,
 
     // Calculate instantaneous acceleration required for change in direction
     // from v1 to v2, assuming constant speed
-    double v_max1 = fmin(prev_tc->maxvel, prev_tc->reqvel * emcmotConfig->maxFeedScale);
-    double v_max2 = fmin(tc->maxvel, tc->reqvel * emcmotConfig->maxFeedScale);
+    double v_max1 = tcGetMaxTargetVel(prev_tc, emcmotConfig->maxFeedScale);
+    double v_max2 = tcGetMaxTargetVel(tc, emcmotConfig->maxFeedScale);
+    // Note that this is a minimum since the velocity at the intersection must
+    // be the slower of the two segments not to violate constraints.
     double v_max = fmin(v_max1, v_max2);
     tp_debug_print("tangent v_max = %f\n",v_max);
 
@@ -1847,6 +1844,9 @@ STATIC int tpHandleBlendArc(TP_STRUCT * const tp, TC_STRUCT * const tc) {
 
     if (res_create == TP_ERR_OK) {
         //Need to do this here since the length changed
+        //KLUDGE set a "fake" target velocity for optimization purposes. This
+        //will be overwritten during actual execution with the sync
+        //calculations.
         tpAddSegmentToQueue(tp, &blend_tc, false);
     } else {
         return res_create;
@@ -1879,17 +1879,17 @@ int tpAddLine(TP_STRUCT * const tp, EmcPose end, int canon_motion_type, double v
             enables,
             atspeed);
 
-    // Copy in motion parameters
-    tcSetupMotion(&tc,
-            vel,
-            ini_maxvel,
-            acc);
-
     // Setup any synced IO for this move
     tpSetupSyncedIO(tp, &tc);
 
     // Copy over state data from the trajectory planner
     tcSetupState(&tc, tp);
+
+    // Copy in motion parameters
+    tcSetupMotion(&tc,
+            vel,
+            ini_maxvel,
+            acc);
 
     // Setup line geometry
     pmLine9Init(&tc.coords.line,
@@ -2692,7 +2692,7 @@ STATIC int tpActivateSegment(TP_STRUCT * const tp, TC_STRUCT * const tc) {
  * Run velocity mode synchronization.
  * Update requested velocity to follow the spindle's velocity (scaled by feed rate).
  */
-STATIC void tpSyncVelocityMode(TP_STRUCT * const tp, TC_STRUCT * const tc, TC_STRUCT const * nexttc) {
+STATIC void tpSyncVelocityMode(TP_STRUCT * const tp, TC_STRUCT * const tc, TC_STRUCT * const nexttc) {
     double speed = emcmotStatus->spindleSpeedIn;
     double pos_error = fabs(speed) * tc->uu_per_rev;
     // Account for movement due to parabolic blending with next segment
@@ -2700,6 +2700,12 @@ STATIC void tpSyncVelocityMode(TP_STRUCT * const tp, TC_STRUCT * const tc, TC_ST
         pos_error -= nexttc->progress;
     }
     tc->target_vel = pos_error;
+
+    if (nexttc && nexttc->synchronized) {
+        //If the next move is synchronized too, then match it's
+        //requested velocity to the current move
+        nexttc->target_vel = tc->target_vel;
+    }
 }
 
 

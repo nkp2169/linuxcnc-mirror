@@ -28,6 +28,29 @@
 #include "tp_debug.h"
 
 
+double tcGetMaxTargetVel(TC_STRUCT const * const tc,
+        double max_scale)
+{
+    double v_max_target;
+
+    switch (tc->synchronized) {
+        case TC_SYNC_NONE:
+            // Get maximum reachable velocity from max feed override
+            v_max_target = tc->reqvel * max_scale;
+            break;
+
+        case TC_SYNC_VELOCITY: //Fallthrough
+        case TC_SYNC_POSITION:
+        default:
+            v_max_target = tc->maxvel;
+            break;
+    }
+
+    // Clip maximum velocity by the segment's own maximum velocity
+    return fmin(v_max_target, tc->maxvel);
+}
+
+
 int tcCircleStartAccelUnitVector(TC_STRUCT const * const tc, PmCartesian * const out)
 {
     PmCartesian startpoint;
@@ -540,6 +563,7 @@ int tcSetupMotion(TC_STRUCT * const tc,
         double ini_maxvel,
         double acc)
 {
+    //FIXME assumes that state is already set up in TC_STRUCT, which depends on external order of function calls.
 
     tc->maxaccel = acc;
 
@@ -547,7 +571,7 @@ int tcSetupMotion(TC_STRUCT * const tc,
 
     tc->reqvel = vel;
     // Initial guess at target velocity is just the requested velocity
-    tc->target_vel = vel;
+    tc->target_vel = 0;
     // TO be filled in by tangent calculation, negative = invalid (KLUDGE)
     tc->kink_vel = -1.0;
 
